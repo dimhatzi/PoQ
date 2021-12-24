@@ -1,0 +1,127 @@
+<?php
+
+$test_validators=    array(100,200);
+$test_mal_validators=array(100,200);
+
+$parameters=10;
+
+$malicious_rating_offset=50;
+$malicious_offset_reporting_range=10;
+
+$non_malicious_rating_offset_variable=20;
+
+$q_first=5;
+$iterations=199;
+
+$show_results=1;	//0=avarage malicious footprint in q-first list, 1=average malicious footprint in 1st place of the q-first list
+if($show_results==0) $show_results_mal='Average Malicious in q-first';
+if($show_results==1) $show_results_mal='Average Malicious in q-first 1st place';
+
+for($test=0; $test<sizeof($test_validators); $test++){
+	$validators=$test_validators[$test];
+	$mal_validators=$test_mal_validators[$test];
+	for($offset=$malicious_rating_offset-$malicious_offset_reporting_range; $offset<=$malicious_rating_offset; $offset++){
+		$averege_mal["offset ".$offset]=loop($iterations);
+	}
+	$test_result[]=array("Non-Malicious Validators"=>$validators,"Malicious Validators"=>$mal_validators,"$show_results_mal"=>$averege_mal);
+	$averege_mal=array();
+}
+print_r($test_result);
+
+function loop($l){
+	for($i=0; $i<$l; $i++){
+		$loop[]=malicious_in_q_first();
+	}
+	$malicious_average = array_sum($loop)/count($loop);
+	return $malicious_average;
+}
+
+function rating_vm_pn(){
+	global $validators,$mal_validators,$parameters,$offset,$non_malicious_rating_offset_variable;
+	for($m=0; $m<($validators+$mal_validators); $m++){
+		for($n=0; $n<$parameters; $n++){
+			if($m<$validators){ //Normal Validators
+				$a=mt_rand(0,$non_malicious_rating_offset_variable);
+				$b=mt_rand(0,$non_malicious_rating_offset_variable);
+				$rating_vm_pn[$m][$n]= mt_rand(0+$a,100-$b)/100;
+			}
+			if($m>=$validators){ //Malicious Validators
+				$r=rand(0,1);
+				if ($r==0)
+					$rating_vm_pn[$m][$n]= mt_rand(0,$offset)/100;
+				else
+					$rating_vm_pn[$m][$n]= mt_rand(100-$offset,100)/100;
+			}
+		}
+	}
+	return $rating_vm_pn;
+}
+
+function mrv_pn_and_sdm_vm_pn(){
+	$a=rating_vm_pn();
+	$sum=0;
+	global $parameters,$validators,$mal_validators;
+	for($n=0; $n<$parameters; $n++){
+		for($m=0; $m<sizeof($a); $m++){
+			$sum=$sum+$a[$m][$n];
+		}
+	$mrv_pn[$n]=$sum/sizeof($a);
+	$sum=0;
+	}
+
+	for($m=0; $m<sizeof($a); $m++){
+		for($n=0; $n<sizeof($a[$m]); $n++){
+			$sdm_vn_pn[$m][$n]=(($a[$m][$n]-$mrv_pn[$n]) ** 2);
+		}
+	}
+	return $sdm_vn_pn;
+}
+
+function perf_vm(){
+	$a=mrv_pn_and_sdm_vm_pn();
+	for($m=0; $m<sizeof($a); $m++){
+		$mean[$m] = array_sum($a[$m])/count($a[$m]);
+		$perf_vm[$m]=1/$mean[$m];
+	}
+	arsort($perf_vm);
+	return $perf_vm;
+}
+
+function q_first_list(){
+	global $q_first;
+	$a=perf_vm();
+	if($q_first>sizeof($a))
+		$q=sizeof($a);
+	else $q=$q_first;
+	for($i=0; $i<$q; $i++){
+		$maxVal = max($a);
+		$maxKey = array_search($maxVal, $a);
+		$q_first_list[$maxKey]=$maxVal;
+		unset($a[$maxKey]);
+	}
+	return $q_first_list;	
+}
+
+function malicious_in_q_first(){
+	global $validators,$show_results;
+	$a=q_first_list();
+	$i=0;
+	foreach ($a as $key=>$value){
+		if ($key>=$validators){
+			$i++;
+		}
+	}
+	if($show_results==0){
+		$malicious_percentage_in_q_first_list=$i*100/sizeof($a);
+		return $malicious_percentage_in_q_first_list;	//either this: Malicious in q-first list
+	}
+	else if($show_results==1){
+		$first = array_key_first($a); //get also the first validator in the list to see if it is malicious
+		if($first>=$validators) $mal_first=100; else $mal_first=0;	//100 for being malicious first and 0 for not
+		return $mal_first;					//or this: Malicious in the first place of q-first list
+	}
+}
+
+
+
+?>
